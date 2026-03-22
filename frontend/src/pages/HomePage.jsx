@@ -264,7 +264,7 @@ export default function HomePage() {
             ))}
           </div>
         ) : suggestions.length===0 ? (
-          {locationDenied ? (
+          locationDenied ? (
             <div style={{ textAlign:'center', padding:'40px 20px', color:'var(--ink-muted)' }}>
               <div style={{ fontSize:40, marginBottom:12 }}>📍</div>
               <div style={{ fontFamily:'var(--font-display)', fontSize:18, color:'var(--ink)', marginBottom:8 }}>Location access needed</div>
@@ -280,7 +280,7 @@ export default function HomePage() {
             </div>
           ) : (
             <EmptyState icon="🗺️" title="No suggestions yet" desc="Click Refresh or type a vibe above." action={() => fetchSuggestions()} actionLabel="Get Suggestions"/>
-          )}
+          )
         ) : (
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
             {suggestions.map(s=><SuggestionCard key={s.id} s={s} onThumb={handleThumb}/>)}
