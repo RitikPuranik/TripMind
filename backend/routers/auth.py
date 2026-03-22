@@ -16,8 +16,6 @@ SCOPES = [
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
-    "https://www.googleapis.com/auth/gmail.readonly",          # READ ONLY — never write
-    "https://www.googleapis.com/auth/calendar.readonly",       # READ ONLY
 ]
 
 # In-memory token store (use Redis/Supabase in production)

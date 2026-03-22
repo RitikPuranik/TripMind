@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useStore } from '../store'
-import { weatherAPI, calendarAPI, alertsAPI, tripsAPI, gmailAPI } from '../services/api'
+import { weatherAPI, alertsAPI, tripsAPI, gmailAPI } from '../services/api'
 import toast from 'react-hot-toast'
 
 // Rule: always select ONE primitive or stable ref at a time from useStore.

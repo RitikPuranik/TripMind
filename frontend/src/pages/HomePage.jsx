@@ -1,21 +1,19 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useStore } from '../store'
-import { useLocation, useWeather, useCalendar } from '../hooks'
+import { useLocation, useWeather } from '../hooks'
 import { suggestionsAPI, prefsAPI } from '../services/api'
 import { Card, CardTitle, SuggestionCard, SectionHeader, Skeleton, EmptyState } from '../components/UI'
 import toast from 'react-hot-toast'
 
 const WMO = {0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Foggy',51:'Light drizzle',53:'Drizzle',61:'Light rain',63:'Moderate rain',65:'Heavy rain',71:'Light snow',80:'Showers',95:'Thunderstorm'}
 const WMO_ICON = c => c>=95?'⛈️':c>=80?'🌦️':c>=71?'❄️':c>=51?'🌧️':c>=45?'🌫️':c>=3?'⛅':c>=2?'🌤️':'☀️'
-const fmt = dt => new Date(dt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
 const ECOLS = ['#C8A96A','#8FA68A','#7BA3C4','#D4907A','#9B8EC4']
+const fmt = dt => new Date(dt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
 
 export default function HomePage() {
   const { coords, locationName } = useLocation()
   const { weather, loading: wLoading } = useWeather()
-  const { calEvents, freeSlots, loading: calLoading } = useCalendar()
 
-  // Single-value selectors only — never destructure from useStore()
   const suggestions          = useStore(s => s.suggestions)
   const setSuggestions       = useStore(s => s.setSuggestions)
   const suggestionsLoading   = useStore(s => s.suggestionsLoading)
@@ -24,27 +22,27 @@ export default function HomePage() {
   const dietary              = useStore(s => s.preferences.dietary)
   const interests            = useStore(s => s.preferences.interests)
   const addThumb             = useStore(s => s.addThumb)
-  const thumbsLog            = useStore(s => s.thumbsLog)
   const trips                = useStore(s => s.trips)
   const activeTrip           = useStore(s => s.activeTrip)
   const user                 = useStore(s => s.user)
 
-  const [vibeInput, setVibeInput] = useState('')
-  const hasFetchedSuggestions = useRef(false)
+  // Manual meetings state (replaces Google Calendar)
+  const [meetings, setMeetings]       = useState([])
+  const [addingMeeting, setAddingMeeting] = useState(false)
+  const [meetingForm, setMeetingForm] = useState({ title:'', time:'', end_time:'', location:'' })
+  const [vibeInput, setVibeInput]     = useState('')
+  const hasFetchedSuggestions         = useRef(false)
 
   const fetchSuggestions = async (vibeArg) => {
-    // Normalize: if called from onClick it receives an Event, not a string
     const vibe = (vibeArg && typeof vibeArg === 'string') ? vibeArg : undefined
     if (!coords) { toast.error('Location not available yet'); return }
-    if (suggestionsLoading) return  // already in flight
+    if (suggestionsLoading) return
     setSuggestionsLoading(true)
     try {
       const cur = weather?.current
       const data = await suggestionsAPI.get({
-        lat: coords.lat,
-        lng: coords.lng,
-        city: locationName || '',
-        free_minutes: (freeSlots && freeSlots[0]) ? freeSlots[0].duration_minutes : 120,
+        lat: coords.lat, lng: coords.lng, city: locationName || '',
+        free_minutes: 120,
         weather_code: cur?.weathercode || 0,
         temperature: cur?.temperature_2m || 28,
         budget_level: budgetLevel || 'mid-range',
@@ -65,7 +63,7 @@ export default function HomePage() {
     if (!coords || hasFetchedSuggestions.current) return
     hasFetchedSuggestions.current = true
     fetchSuggestions()
-  }, [coords?.lat, coords?.lng]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [coords?.lat, coords?.lng]) // eslint-disable-line
 
   const handleThumb = (id, vote) => {
     const s = suggestions.find(x => x.id === id)
@@ -76,23 +74,56 @@ export default function HomePage() {
     prefsAPI.feedbackSignal(s.place_type, vote).catch(() => {})
   }
 
+  const addMeeting = () => {
+    if (!meetingForm.title.trim()) { toast.error('Enter a meeting title'); return }
+    setMeetings(prev => [...prev, { ...meetingForm, id: Date.now() }])
+    setMeetingForm({ title:'', time:'', end_time:'', location:'' })
+    setAddingMeeting(false)
+    toast.success('Meeting added')
+  }
+
+  const removeMeeting = (id) => setMeetings(prev => prev.filter(m => m.id !== id))
+
+  // Detect free slots between meetings
+  const getFreeSlots = () => {
+    const now = new Date()
+    const timed = meetings
+      .filter(m => m.time)
+      .sort((a,b) => a.time.localeCompare(b.time))
+    if (timed.length === 0) return [{ duration_minutes: 180, label: 'Free today' }]
+    const slots = []
+    let lastEnd = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`
+    for (const m of timed) {
+      if (m.time > lastEnd) {
+        const [sh,sm] = lastEnd.split(':').map(Number)
+        const [eh,em] = m.time.split(':').map(Number)
+        const mins = (eh*60+em) - (sh*60+sm)
+        if (mins >= 30) slots.push({ duration_minutes: mins, label: `${mins}min before "${m.title}"` })
+      }
+      lastEnd = m.end_time || m.time
+    }
+    return slots
+  }
+
+  const freeSlots = getFreeSlots()
   const cur    = weather?.current
   const code   = cur?.weathercode ?? 0
   const isRain = code >= 51 && code <= 82
   const isHot  = (cur?.temperature_2m ?? 28) > 36
 
-  const todayEvents = calEvents.filter(e => {
-    try { return new Date(e.start?.dateTime || e.start?.date || e.start).toDateString() === new Date().toDateString() }
-    catch { return false }
-  })
-
   const h    = new Date().getHours()
   const name = user?.name?.split(' ')[0] || 'Traveler'
   const greeting = h < 12 ? `Good morning, ${name} ☀️` : h < 17 ? `Good afternoon, ${name} 👋` : `Good evening, ${name} 🌙`
 
+  const inputStyle = {
+    flex:1, padding:'8px 10px', borderRadius:8, border:'1px solid var(--border)',
+    background:'var(--cream)', fontSize:12, fontFamily:'var(--font-body)', outline:'none',
+  }
+
   return (
     <div style={{ maxWidth:1100 }}>
-      <div style={{ marginBottom:24 }}>
+      {/* Greeting */}
+      <div style={{ marginBottom:20 }}>
         <h1 style={{ fontFamily:'var(--font-display)', fontSize:28, fontWeight:600, letterSpacing:'-0.5px' }}>{greeting}</h1>
         <p style={{ fontSize:13, color:'var(--ink-muted)', marginTop:4 }}>
           {new Date().toLocaleDateString([],{weekday:'long',month:'long',day:'numeric'})}
@@ -100,33 +131,24 @@ export default function HomePage() {
         </p>
       </div>
 
+      {/* Weather alerts */}
       {isRain && (
-        <div style={{ background:'var(--sky-light)', border:'1px solid rgba(123,163,196,0.3)', borderRadius:12, padding:'12px 16px', marginBottom:16, display:'flex', gap:12 }}>
+        <div style={{ background:'var(--sky-light)', border:'1px solid rgba(123,163,196,0.3)', borderRadius:12, padding:'12px 16px', marginBottom:12, display:'flex', gap:12 }}>
           <span style={{ fontSize:20 }}>🌧️</span>
           <div><div style={{ fontSize:13, fontWeight:500 }}>Rain expected today</div><div style={{ fontSize:12, color:'var(--ink-muted)' }}>Suggestions switched to indoor venues</div></div>
         </div>
       )}
       {isHot && (
-        <div style={{ background:'var(--blush-light)', border:'1px solid rgba(212,144,122,0.3)', borderRadius:12, padding:'12px 16px', marginBottom:16, display:'flex', gap:12 }}>
+        <div style={{ background:'var(--blush-light)', border:'1px solid rgba(212,144,122,0.3)', borderRadius:12, padding:'12px 16px', marginBottom:12, display:'flex', gap:12 }}>
           <span style={{ fontSize:20 }}>🌡️</span>
           <div><div style={{ fontSize:13, fontWeight:500 }}>Heat alert — {Math.round(cur.temperature_2m)}°C</div><div style={{ fontSize:12, color:'var(--ink-muted)' }}>Prioritising AC venues and shaded spots</div></div>
         </div>
       )}
 
-      {freeSlots.length > 0 && (
-        <div style={{ background:'linear-gradient(135deg,var(--gold-pale),#FFF8ED)', border:'1px solid rgba(200,169,106,0.3)', borderRadius:14, padding:'14px 18px', marginBottom:20, display:'flex', alignItems:'center', gap:14 }}>
-          <span style={{ fontSize:24 }}>⏰</span>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:14, fontWeight:500 }}>You have {freeSlots[0].duration_minutes} mins free</div>
-            <div style={{ fontSize:12, color:'var(--ink-muted)' }}>{freeSlots[0].label}</div>
-          </div>
-          <button onClick={() => fetchSuggestions()} style={{ padding:'8px 16px', borderRadius:10, border:'none', background:'var(--ink)', color:'white', fontSize:12, fontWeight:500, cursor:'pointer', fontFamily:'var(--font-body)' }}>
-            Suggest Now
-          </button>
-        </div>
-      )}
-
+      {/* ROW 1: Weather + Today's Schedule */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 320px', gap:16, marginBottom:20 }}>
+
+        {/* Weather */}
         <div style={{ background:'linear-gradient(135deg,#1A1A18,#2D3B4A)', borderRadius:20, padding:28, color:'white', position:'relative', overflow:'hidden' }}>
           <div style={{ position:'absolute', top:-30, right:-30, width:160, height:160, background:'radial-gradient(circle,rgba(200,169,106,0.15),transparent 70%)', borderRadius:'50%' }}/>
           {wLoading ? (
@@ -148,37 +170,89 @@ export default function HomePage() {
           )}
         </div>
 
+        {/* Today's Schedule — manual */}
         <Card style={{ padding:20 }}>
-          <CardTitle style={{ fontSize:16, marginBottom:12 }}>Today's Schedule</CardTitle>
-          {calLoading ? [1,2,3].map(i=><div key={i} style={{ display:'flex', gap:10, marginBottom:12 }}><Skeleton width={40} height={12}/><Skeleton width={120} height={12}/></div>)
-          : todayEvents.length === 0 ? (
-            <div style={{ textAlign:'center', padding:'20px 0', color:'var(--ink-muted)', fontSize:13 }}>
-              <div style={{ fontSize:28, marginBottom:8 }}>📅</div>Free day!
-            </div>
-          ) : todayEvents.map((e,i)=>{
-            const start = e.start?.dateTime||e.start?.date||e.start
-            return (
-              <div key={e.id||i} style={{ display:'flex', gap:10, alignItems:'flex-start', padding:'8px 0', borderBottom:'1px solid var(--border)' }}>
-                <span style={{ fontSize:11, color:'var(--ink-muted)', minWidth:44, paddingTop:2, fontWeight:500 }}>{start?.includes('T')?fmt(start):'All day'}</span>
-                <span style={{ width:7, height:7, borderRadius:'50%', background:ECOLS[i%5], flexShrink:0, marginTop:5 }}/>
-                <div><div style={{ fontSize:13, fontWeight:500 }}>{e.summary||'Event'}</div>{e.location&&<div style={{ fontSize:11, color:'var(--ink-muted)' }}>📍 {e.location}</div>}</div>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+            <CardTitle style={{ fontSize:16, marginBottom:0 }}>Today's Schedule</CardTitle>
+            <button onClick={() => setAddingMeeting(v=>!v)} style={{
+              fontSize:11, padding:'4px 10px', borderRadius:8, border:'1px solid var(--border)',
+              background:'var(--cream)', cursor:'pointer', fontFamily:'var(--font-body)', color:'var(--ink-muted)',
+            }}>+ Add</button>
+          </div>
+
+          {/* Add meeting form */}
+          {addingMeeting && (
+            <div style={{ background:'var(--cream)', borderRadius:10, padding:10, marginBottom:12, animation:'slideDown 0.2s ease' }}>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                <input style={{...inputStyle, flex:'none'}} placeholder="Meeting title *"
+                  value={meetingForm.title} onChange={e=>setMeetingForm(p=>({...p,title:e.target.value}))}/>
+                <div style={{ display:'flex', gap:6 }}>
+                  <input style={inputStyle} type="time" placeholder="Start"
+                    value={meetingForm.time} onChange={e=>setMeetingForm(p=>({...p,time:e.target.value}))}/>
+                  <input style={inputStyle} type="time" placeholder="End"
+                    value={meetingForm.end_time} onChange={e=>setMeetingForm(p=>({...p,end_time:e.target.value}))}/>
+                </div>
+                <input style={{...inputStyle, flex:'none'}} placeholder="Location (optional)"
+                  value={meetingForm.location} onChange={e=>setMeetingForm(p=>({...p,location:e.target.value}))}/>
+                <div style={{ display:'flex', gap:6, marginTop:2 }}>
+                  <button onClick={addMeeting} style={{ flex:1, padding:'6px', borderRadius:8, border:'none', background:'var(--ink)', color:'white', fontSize:12, cursor:'pointer', fontFamily:'var(--font-body)' }}>Add</button>
+                  <button onClick={() => setAddingMeeting(false)} style={{ flex:1, padding:'6px', borderRadius:8, border:'1px solid var(--border)', background:'none', fontSize:12, cursor:'pointer', fontFamily:'var(--font-body)' }}>Cancel</button>
+                </div>
               </div>
-            )
-          })}
+            </div>
+          )}
+
+          {meetings.length === 0 ? (
+            <div style={{ textAlign:'center', padding:'20px 0', color:'var(--ink-muted)', fontSize:13 }}>
+              <div style={{ fontSize:28, marginBottom:8 }}>📅</div>
+              No meetings today — free to explore!
+            </div>
+          ) : meetings.map((m,i) => (
+            <div key={m.id} style={{ display:'flex', gap:10, alignItems:'flex-start', padding:'8px 0', borderBottom:'1px solid var(--border)' }}>
+              <span style={{ fontSize:11, color:'var(--ink-muted)', minWidth:44, paddingTop:2, fontWeight:500 }}>
+                {m.time || 'Anytime'}
+              </span>
+              <span style={{ width:7, height:7, borderRadius:'50%', background:ECOLS[i%5], flexShrink:0, marginTop:5 }}/>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:500 }}>{m.title}</div>
+                {m.location && <div style={{ fontSize:11, color:'var(--ink-muted)' }}>📍 {m.location}</div>}
+              </div>
+              <button onClick={() => removeMeeting(m.id)} style={{ border:'none', background:'none', cursor:'pointer', color:'var(--ink-faint)', fontSize:14, padding:'0 4px' }}>×</button>
+            </div>
+          ))}
         </Card>
       </div>
 
+      {/* ROW 2: Smart Suggestions */}
       <div style={{ marginBottom:20 }}>
-        <input value={vibeInput} onChange={e=>setVibeInput(e.target.value)}
-          onKeyDown={e=>{if(e.key==='Enter'&&vibeInput.trim()){fetchSuggestions(vibeInput);setVibeInput('')}}}
-          placeholder="Describe a vibe… 'koi chill jagah batao' or 'hidden café with WiFi'"
-          style={{ width:'100%', padding:'13px 18px', borderRadius:14, border:'1px solid var(--border)', background:'var(--white)', fontSize:13, fontFamily:'var(--font-body)', color:'var(--ink)', outline:'none', boxShadow:'var(--shadow-sm)' }}
-          onFocus={e=>e.target.style.borderColor='var(--gold)'} onBlur={e=>e.target.style.borderColor='var(--border)'}
-        />
-      </div>
+        <SectionHeader title="Smart Suggestions" action={() => fetchSuggestions()} actionLabel="↺ Refresh"/>
 
-      <div style={{ marginBottom:20 }}>
-        <SectionHeader title="Smart Suggestions" action={()=>fetchSuggestions()} actionLabel="↺ Refresh"/>
+        {/* Free time banner */}
+        {freeSlots.length > 0 && freeSlots[0].duration_minutes >= 30 && (
+          <div style={{ background:'linear-gradient(135deg,var(--gold-pale),#FFF8ED)', border:'1px solid rgba(200,169,106,0.3)', borderRadius:14, padding:'12px 18px', marginBottom:12, display:'flex', alignItems:'center', gap:14 }}>
+            <span style={{ fontSize:20 }}>⏰</span>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:13, fontWeight:500 }}>You have {freeSlots[0].duration_minutes} mins free</div>
+              <div style={{ fontSize:11, color:'var(--ink-muted)' }}>{freeSlots[0].label}</div>
+            </div>
+            <button onClick={() => fetchSuggestions()} style={{ padding:'7px 14px', borderRadius:10, border:'none', background:'var(--ink)', color:'white', fontSize:12, fontWeight:500, cursor:'pointer', fontFamily:'var(--font-body)', whiteSpace:'nowrap' }}>
+              Suggest Now
+            </button>
+          </div>
+        )}
+
+        {/* Vibe search */}
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontSize:11, color:'var(--ink-muted)', fontWeight:500, textTransform:'uppercase', letterSpacing:'0.6px', marginBottom:6 }}>Search by Vibe</div>
+          <input value={vibeInput} onChange={e=>setVibeInput(e.target.value)}
+            onKeyDown={e=>{if(e.key==='Enter'&&vibeInput.trim()){fetchSuggestions(vibeInput);setVibeInput('')}}}
+            placeholder="'koi chill jagah batao' · 'hidden café with WiFi' · 'something outdoors'"
+            style={{ width:'100%', padding:'11px 16px', borderRadius:12, border:'1px solid var(--border)', background:'var(--white)', fontSize:13, fontFamily:'var(--font-body)', color:'var(--ink)', outline:'none', boxShadow:'var(--shadow-sm)' }}
+            onFocus={e=>e.target.style.borderColor='var(--gold)'} onBlur={e=>e.target.style.borderColor='var(--border)'}
+          />
+        </div>
+
+        {/* Results */}
         {suggestionsLoading ? (
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
             {[1,2,3,4].map(i=>(
@@ -189,7 +263,7 @@ export default function HomePage() {
             ))}
           </div>
         ) : suggestions.length===0 ? (
-          <EmptyState icon="🗺️" title="No suggestions yet" desc="Allow location access or type a vibe above." action={()=>fetchSuggestions()} actionLabel="Get Suggestions"/>
+          <EmptyState icon="🗺️" title="No suggestions yet" desc="Click Refresh or type a vibe above." action={() => fetchSuggestions()} actionLabel="Get Suggestions"/>
         ) : (
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
             {suggestions.map(s=><SuggestionCard key={s.id} s={s} onThumb={handleThumb}/>)}
@@ -197,21 +271,19 @@ export default function HomePage() {
         )}
       </div>
 
+      {/* Trips summary */}
       <Card>
         <CardTitle>My Trips</CardTitle>
         {trips.length===0 ? (
-          <div style={{ textAlign:'center', padding:'20px 0', color:'var(--ink-muted)', fontSize:13 }}>
-            <div style={{ fontSize:32, marginBottom:8 }}>✈️</div>
-            <div>No trips yet</div>
-            <div style={{ fontSize:11, marginTop:4 }}>Sync Gmail to detect your trips automatically</div>
+          <div style={{ textAlign:'center', padding:'12px 0', color:'var(--ink-muted)', fontSize:13 }}>
+            <div style={{ fontSize:24, marginBottom:6 }}>✈️</div>Go to Trips tab to add your journeys
           </div>
         ) : trips.slice(0,4).map((t,i)=>(
           <div key={t.id||i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
             <div>
               <div style={{ fontSize:13, fontWeight:500 }}>{t.destination}</div>
-              <div style={{ fontSize:11, color:'var(--ink-muted)', marginTop:1 }}>
+              <div style={{ fontSize:11, color:'var(--ink-muted)' }}>
                 {t.start_date ? new Date(t.start_date).toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'}) : 'Date TBD'}
-                {t.trip_type && t.trip_type !== 'general' ? ' · ' + t.trip_type : ''}
               </div>
             </div>
             <span style={{ padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:500, background:t.status==='active'?'var(--sage-light)':t.status==='past'?'var(--cream)':'var(--gold-light)', color:t.status==='active'?'var(--sage)':t.status==='past'?'var(--ink-muted)':'var(--gold-deep)' }}>
