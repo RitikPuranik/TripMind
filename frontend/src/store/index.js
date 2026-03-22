@@ -73,7 +73,7 @@ export const useStore = create(
         user: s.user,
         preferences: s.preferences,
         thumbsLog: s.thumbsLog,
-        locationName: s.locationName,
+        // Don't persist coords/locationName — always get fresh GPS on each load
         chatHistory: s.chatHistory,
       }),
     }

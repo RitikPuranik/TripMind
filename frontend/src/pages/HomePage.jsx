@@ -11,7 +11,7 @@ const ECOLS = ['#C8A96A','#8FA68A','#7BA3C4','#D4907A','#9B8EC4']
 const fmt = dt => new Date(dt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
 
 export default function HomePage() {
-  const { coords, locationName } = useLocation()
+  const { coords, locationName, locationDenied } = useLocation()
   const { weather, loading: wLoading } = useWeather()
 
   const suggestions          = useStore(s => s.suggestions)
@@ -60,6 +60,7 @@ export default function HomePage() {
   }
 
   useEffect(() => {
+    // Only auto-fetch if we have REAL GPS coords — not hardcoded fallback
     if (!coords || hasFetchedSuggestions.current) return
     hasFetchedSuggestions.current = true
     fetchSuggestions()
@@ -263,7 +264,23 @@ export default function HomePage() {
             ))}
           </div>
         ) : suggestions.length===0 ? (
-          <EmptyState icon="🗺️" title="No suggestions yet" desc="Click Refresh or type a vibe above." action={() => fetchSuggestions()} actionLabel="Get Suggestions"/>
+          {locationDenied ? (
+            <div style={{ textAlign:'center', padding:'40px 20px', color:'var(--ink-muted)' }}>
+              <div style={{ fontSize:40, marginBottom:12 }}>📍</div>
+              <div style={{ fontFamily:'var(--font-display)', fontSize:18, color:'var(--ink)', marginBottom:8 }}>Location access needed</div>
+              <div style={{ fontSize:13, marginBottom:16, lineHeight:1.5 }}>
+                TripMind needs your location to suggest nearby places.<br/>
+                Please allow location access in your browser settings and refresh.
+              </div>
+              <button onClick={() => window.location.reload()} style={{
+                padding:'10px 24px', borderRadius:12, border:'none',
+                background:'var(--ink)', color:'white', fontSize:13,
+                fontWeight:500, cursor:'pointer', fontFamily:'var(--font-body)',
+              }}>Allow Location & Refresh</button>
+            </div>
+          ) : (
+            <EmptyState icon="🗺️" title="No suggestions yet" desc="Click Refresh or type a vibe above." action={() => fetchSuggestions()} actionLabel="Get Suggestions"/>
+          )}
         ) : (
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
             {suggestions.map(s=><SuggestionCard key={s.id} s={s} onThumb={handleThumb}/>)}

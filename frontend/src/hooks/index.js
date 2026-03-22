@@ -7,19 +7,29 @@ import toast from 'react-hot-toast'
 // Never do: const { a, b } = useStore() — this creates a new object every render.
 
 export function useLocation() {
-  const coords      = useStore(s => s.coords)
+  const coords       = useStore(s => s.coords)
   const locationName = useStore(s => s.locationName)
   const setLocation  = useStore(s => s.setLocation)
   const hasFetched   = useRef(false)
+  const [locationDenied, setLocationDenied] = useState(false)
 
   useEffect(() => {
     if (hasFetched.current || coords) return
     hasFetched.current = true
-    navigator.geolocation?.getCurrentPosition(
+
+    if (!navigator.geolocation) {
+      setLocationDenied(true)
+      return
+    }
+
+    // Always request fresh — don't use cached coords from store if stale
+    navigator.geolocation.getCurrentPosition(
       async pos => {
         const { latitude: lat, longitude: lng } = pos.coords
         try {
-          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
+          const r = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+          )
           const d = await r.json()
           const name = d.address?.city || d.address?.town || d.address?.suburb || 'Your location'
           setLocation({ lat, lng }, name)
@@ -27,12 +37,16 @@ export function useLocation() {
           setLocation({ lat, lng }, 'Your location')
         }
       },
-      () => setLocation({ lat: 23.2599, lng: 77.4126 }, 'Bhopal, MP'),
-      { enableHighAccuracy: true, timeout: 8000 }
+      (err) => {
+        // Do NOT fall back to hardcoded Bhopal — just mark as denied
+        console.warn('Location denied or unavailable:', err.message)
+        setLocationDenied(true)
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     )
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { coords, locationName }
+  return { coords, locationName, locationDenied }
 }
 
 export function useWeather() {
