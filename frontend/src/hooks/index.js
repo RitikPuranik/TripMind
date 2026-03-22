@@ -14,7 +14,7 @@ export function useLocation() {
   const [locationDenied, setLocationDenied] = useState(false)
 
   useEffect(() => {
-    if (hasFetched.current || coords) return
+    if (hasFetched.current) return
     hasFetched.current = true
 
     if (!navigator.geolocation) {
@@ -22,7 +22,7 @@ export function useLocation() {
       return
     }
 
-    // Always request fresh — don't use cached coords from store if stale
+    // Always request fresh GPS — ignore any cached store value
     navigator.geolocation.getCurrentPosition(
       async pos => {
         const { latitude: lat, longitude: lng } = pos.coords

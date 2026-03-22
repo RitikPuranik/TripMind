@@ -45,6 +45,7 @@ export default function ExplorePage() {
   // Selected trip for explore context — default to active trip if exists
   const [selectedTripId, setSelectedTripId] = useState(activeTrip?.id || '__current_location__')
   const [input,          setInput]          = useState('')
+  const [specificPlace,  setSpecificPlace]  = useState('')
   const [hiddenGems,     setHiddenGems]     = useState(false)
   const [groupMode,      setGroupMode]      = useState(false)
   const [groupProfiles,  setGroupProfiles]  = useState([{ name:'', dietary:'', interests:'' }])
@@ -80,12 +81,16 @@ export default function ExplorePage() {
     }
   }
 
-  const search = useCallback(async (vibe) => {
+  const search = useCallback(async (vibe, placeName) => {
     const ctx = getSearchContext()
     if (!ctx.lat && !ctx.city) { toast.error('Location not available'); return }
     setSuggestionsLoading(true)
     try {
       const cur = weather?.current
+      // If searching for a specific place, use it as the vibe with high specificity
+      const searchVibe = placeName
+        ? `Find the specific place called "${placeName}" in ${ctx.city}. If it exists, show it first. Then show similar well-known places nearby.`
+        : vibe || null
       const data = await suggestionsAPI.get({
         lat: ctx.lat || 20.5937,
         lng: ctx.lng || 78.9629,
@@ -96,7 +101,7 @@ export default function ExplorePage() {
         budget_level: budgetLevel || 'mid-range',
         dietary: dietary || 'no restrictions',
         interests: interests || [],
-        vibe: vibe || null,
+        vibe: searchVibe,
         hidden_gems_only: hiddenGems,
         group_profiles: groupMode ? groupProfiles.filter(p => p.name) : null,
       })
@@ -204,6 +209,31 @@ export default function ExplorePage() {
           onBlur={e  => e.target.style.borderColor = 'var(--border)'}
         />
         <Btn onClick={() => { search(input); setInput('') }} variant="primary" style={{ padding:'0 20px' }}>Search</Btn>
+      </div>
+
+      {/* Specific place search */}
+      <div style={{ marginBottom:14 }}>
+        <div style={{ fontSize:11, color:'var(--ink-muted)', fontWeight:500, textTransform:'uppercase', letterSpacing:'0.6px', marginBottom:6 }}>
+          Search a Specific Place
+        </div>
+        <div style={{ display:'flex', gap:10 }}>
+          <input value={specificPlace} onChange={e => setSpecificPlace(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && specificPlace.trim()) { search(null, specificPlace); setSpecificPlace('') }}}
+            placeholder={`e.g. "Starbucks", "Van Vihar", "Pizza Hut ${ctx.label}"…`}
+            style={{
+              flex:1, padding:'11px 16px', borderRadius:12, border:'1px solid var(--border)',
+              background:'var(--white)', fontSize:13, fontFamily:'var(--font-body)',
+              color:'var(--ink)', outline:'none',
+            }}
+            onFocus={e => e.target.style.borderColor = 'var(--sky)'}
+            onBlur={e  => e.target.style.borderColor = 'var(--border)'}
+          />
+          <button onClick={() => { if (specificPlace.trim()) { search(null, specificPlace); setSpecificPlace('') }}} style={{
+            padding:'0 18px', borderRadius:12, border:'none',
+            background:'var(--sky)', color:'white', fontSize:13,
+            fontWeight:500, cursor:'pointer', fontFamily:'var(--font-body)', whiteSpace:'nowrap',
+          }}>Find Place</button>
+        </div>
       </div>
 
       {/* Quick vibes */}

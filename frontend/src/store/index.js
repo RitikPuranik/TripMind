@@ -26,6 +26,7 @@ export const useStore = create(
       coords: null,
       locationName: '',
       setLocation: (coords, name) => set({ coords, locationName: name }),
+      clearLocation: () => set({ coords: null, locationName: '' }),
 
       weather: null,
       setWeather: (weather) => set({ weather }),

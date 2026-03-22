@@ -201,7 +201,11 @@ async def llm_generate_suggestions(
         group_constraint = f"GROUP TRIP: Must satisfy all profiles: {'; '.join(constraints)}"
 
     system = f"""You are TripMind's recommendation engine for {city}.
-Generate exactly 5 place suggestions scored on 6 factors: distance, time fit, preference match, crowd prediction, weather suitability, budget match.
+Generate exactly 5 place suggestions. RANKING RULES (strictly follow):
+1. TOP 2-3 must be the most WELL-KNOWN, POPULAR, HIGHLY-RATED places that locals and visitors both know
+2. BOTTOM 1-2 can be hidden gems or lesser-known spots
+3. Use REAL place names that actually exist in {city} — not generic names
+4. Score popular/well-known places higher (0.85-1.0), hidden gems lower (0.65-0.80)
 
 CONSTRAINTS:
 - Free time: {free_minutes} minutes
@@ -212,16 +216,16 @@ CONSTRAINTS:
 - Vibe requested: {vibe or 'not specified'}
 - Liked place types: {', '.join(liked_types) or 'none yet'}
 - Disliked place types: {', '.join(disliked_types) or 'none'}
-- {'HIDDEN GEMS ONLY: No chains, no tourist traps' if hidden_gems_only else 'Mix of popular and local'}
+- {'HIDDEN GEMS ONLY: local spots, no tourist traps' if hidden_gems_only else 'TOP PRIORITY: famous well-known places first, then local gems'}
 {group_constraint}
 
-Return ONLY a JSON array of 5 objects:
+Return ONLY a JSON array of 5 objects sorted by score descending (highest first):
 [{{
   "id": "unique_slug",
-  "name": "Real place name in {city}",
+  "name": "REAL well-known place name in {city}",
   "place_type": "cafe|restaurant|park|museum|market|lounge|activity",
   "emoji": "single emoji",
-  "address": "area/neighborhood in {city}",
+  "address": "real area/neighborhood in {city}",
   "lat": approximate_lat,
   "lng": approximate_lng,
   "distance_text": "X min walk/drive",
@@ -232,7 +236,7 @@ Return ONLY a JSON array of 5 objects:
   "weather_ok": true/false,
   "score": 0.0-1.0,
   "reason": "Suggested because: [2-3 specific reasons fitting current context]",
-  "hidden_gem": true/false,
+  "hidden_gem": false for popular places / true for local gems,
   "safety_ok": true,
   "etiquette_tip": "short tip or null"
 }}]"""
