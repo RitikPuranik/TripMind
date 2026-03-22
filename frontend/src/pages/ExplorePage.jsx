@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { useStore } from '../store'
 import { useLocation } from '../hooks'
 import { suggestionsAPI } from '../services/api'
-import { SuggestionCard, SectionHeader, EmptyState, Btn, Skeleton, Badge } from '../components/UI'
+import { SuggestionCard, SectionHeader, EmptyState, Btn, Skeleton } from '../components/UI'
 import toast from 'react-hot-toast'
 
 const QUICK_VIBES = [
@@ -38,59 +38,41 @@ export default function ExplorePage() {
   const weather               = useStore(s => s.weather)
   const trips                 = useStore(s => s.trips)
 
-  // Active/upcoming trips only (not expired)
   const validTrips = trips.filter(t => getTripStatus(t) !== 'past')
   const activeTrip = trips.find(t => getTripStatus(t) === 'active')
 
-  // Selected trip for explore context — default to active trip if exists
   const [selectedTripId, setSelectedTripId] = useState(activeTrip?.id || '__current_location__')
-  const [input,          setInput]          = useState('')
-  const [specificPlace,  setSpecificPlace]  = useState('')
+  const [query,          setQuery]          = useState('')  // single unified input
   const [hiddenGems,     setHiddenGems]     = useState(false)
   const [groupMode,      setGroupMode]      = useState(false)
   const [groupProfiles,  setGroupProfiles]  = useState([{ name:'', dietary:'', interests:'' }])
 
-  // Update selected trip when trips load
   useEffect(() => {
     if (activeTrip && selectedTripId === '__current_location__') {
       setSelectedTripId(activeTrip.id)
     }
-  }, [activeTrip?.id])
+  }, [activeTrip?.id])  // eslint-disable-line
 
-  // Resolve which location/city to use for search
   const getSearchContext = () => {
     if (selectedTripId === '__current_location__' || validTrips.length === 0) {
-      return {
-        lat: coords?.lat,
-        lng: coords?.lng,
-        city: locationName || '',
-        label: locationName || 'Your location',
-        isTrip: false,
-      }
+      return { lat: coords?.lat, lng: coords?.lng, city: locationName || '', label: locationName || 'Your location', isTrip: false }
     }
     const trip = trips.find(t => t.id === selectedTripId)
     if (!trip) return { lat: coords?.lat, lng: coords?.lng, city: locationName, label: locationName, isTrip: false }
-    // Use trip city for suggestions — geocode if needed, else use coords as fallback
-    return {
-      lat: coords?.lat,   // fallback coords (Groq will use city name primarily)
-      lng: coords?.lng,
-      city: trip.city || trip.destination,
-      label: trip.destination,
-      isTrip: true,
-      trip,
-    }
+    return { lat: coords?.lat, lng: coords?.lng, city: trip.city || trip.destination, label: trip.destination, isTrip: true, trip }
   }
 
-  const search = useCallback(async (vibe, placeName) => {
+  const search = useCallback(async (queryText) => {
     const ctx = getSearchContext()
-    if (!ctx.lat && !ctx.city) { toast.error('Location not available'); return }
+    const q = (queryText || query || '').trim()
+    if (!ctx.city && !ctx.lat) { toast.error('Location not available'); return }
+    if (!q) { toast.error('Type something to search'); return }
+
     setSuggestionsLoading(true)
     try {
       const cur = weather?.current
-      // If searching for a specific place, use it as the vibe with high specificity
-      const searchVibe = placeName
-        ? `Find the specific place called "${placeName}" in ${ctx.city}. If it exists, show it first. Then show similar well-known places nearby.`
-        : vibe || null
+      // Single smart vibe — works for both "Starbucks" and "quiet café with wifi"
+      const smartVibe = `${q} in ${ctx.city || ctx.label}`
       const data = await suggestionsAPI.get({
         lat: ctx.lat || 20.5937,
         lng: ctx.lng || 78.9629,
@@ -101,14 +83,14 @@ export default function ExplorePage() {
         budget_level: budgetLevel || 'mid-range',
         dietary: dietary || 'no restrictions',
         interests: interests || [],
-        vibe: searchVibe,
+        vibe: smartVibe,
         hidden_gems_only: hiddenGems,
         group_profiles: groupMode ? groupProfiles.filter(p => p.name) : null,
       })
       setSuggestions(Array.isArray(data) ? data : [])
     } catch { toast.error('Search failed') }
     setSuggestionsLoading(false)
-  }, [selectedTripId, coords?.lat, coords?.lng, hiddenGems, groupMode, groupProfiles]) // eslint-disable-line
+  }, [query, selectedTripId, coords?.lat, coords?.lng, hiddenGems, groupMode, groupProfiles]) // eslint-disable-line
 
   const handleThumb = useCallback((id, vote) => {
     const s = suggestions.find(x => x.id === id)
@@ -125,17 +107,15 @@ export default function ExplorePage() {
         Explore
       </h1>
       <p style={{ fontSize:13, color:'var(--ink-muted)', marginBottom:20 }}>
-        Find places — switch between your current location or a trip destination
+        Search by vibe or by specific place name — works for any language
       </p>
 
-      {/* ── Location / Trip selector ── */}
+      {/* Location / Trip selector */}
       <div style={{ marginBottom:20 }}>
         <div style={{ fontSize:11, color:'var(--ink-muted)', fontWeight:500, textTransform:'uppercase', letterSpacing:'0.6px', marginBottom:8 }}>
           Exploring in
         </div>
         <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-
-          {/* Current location option */}
           <button onClick={() => setSelectedTripId('__current_location__')} style={{
             display:'flex', alignItems:'center', gap:6,
             padding:'8px 14px', borderRadius:12, fontSize:13, cursor:'pointer',
@@ -150,8 +130,6 @@ export default function ExplorePage() {
               <span style={{ fontSize:10, background:'var(--gold)', color:'white', borderRadius:10, padding:'1px 6px' }}>NOW</span>
             )}
           </button>
-
-          {/* Trip options */}
           {validTrips.map(trip => {
             const status = getTripStatus(trip)
             const isSelected = selectedTripId === trip.id
@@ -162,84 +140,55 @@ export default function ExplorePage() {
                 fontFamily:'var(--font-body)', transition:'all 0.15s',
                 border: `1px solid ${isSelected ? 'var(--sky)' : 'var(--border)'}`,
                 background: isSelected ? 'var(--sky-light)' : 'var(--white)',
-                fontWeight: isSelected ? 500 : 400,
-                color: 'var(--ink)',
+                fontWeight: isSelected ? 500 : 400, color: 'var(--ink)',
               }}>
                 ✈️ {trip.destination}
-                <span style={{
-                  fontSize:10, borderRadius:10, padding:'1px 6px',
-                  background: status === 'active' ? 'var(--sage)' : 'var(--gold-light)',
-                  color: status === 'active' ? 'white' : 'var(--gold-deep)',
-                }}>
+                <span style={{ fontSize:10, borderRadius:10, padding:'1px 6px', background: status === 'active' ? 'var(--sage)' : 'var(--gold-light)', color: status === 'active' ? 'white' : 'var(--gold-deep)' }}>
                   {status === 'active' ? 'NOW' : 'SOON'}
                 </span>
               </button>
             )
           })}
         </div>
-
-        {/* Context banner */}
-        <div style={{
-          marginTop:10, padding:'10px 14px', borderRadius:10, fontSize:12,
-          background: ctx.isTrip ? 'var(--sky-light)' : 'var(--sage-light)',
-          border: `1px solid ${ctx.isTrip ? 'rgba(123,163,196,0.3)' : 'rgba(143,166,138,0.3)'}`,
-          color: 'var(--ink-soft)',
-        }}>
-          {ctx.isTrip
-            ? `✈️ Showing places in ${ctx.label} — suggestions tailored for your trip`
-            : `📍 Showing places near ${ctx.label} — based on your current location`
-          }
+        <div style={{ marginTop:10, padding:'10px 14px', borderRadius:10, fontSize:12, background: ctx.isTrip ? 'var(--sky-light)' : 'var(--sage-light)', border: `1px solid ${ctx.isTrip ? 'rgba(123,163,196,0.3)' : 'rgba(143,166,138,0.3)'}`, color:'var(--ink-soft)' }}>
+          {ctx.isTrip ? `✈️ Exploring in ${ctx.label}` : `📍 Exploring near ${ctx.label}`}
         </div>
       </div>
 
-      {/* Search bar */}
-      <div style={{ display:'flex', gap:10, marginBottom:14 }}>
-        <input value={input} onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && input.trim()) { search(input); setInput('') }}}
-          placeholder={ctx.isTrip
-            ? `Find places in ${ctx.label}… 'best street food' or 'hidden cafés'`
-            : `'koi chill jagah batao' · 'hidden café with WiFi'`
-          }
-          style={{
-            flex:1, padding:'12px 16px', borderRadius:14, border:'1px solid var(--border)',
-            background:'var(--white)', fontSize:13, fontFamily:'var(--font-body)',
-            color:'var(--ink)', outline:'none', boxShadow:'var(--shadow-sm)',
-          }}
-          onFocus={e => e.target.style.borderColor = 'var(--gold)'}
-          onBlur={e  => e.target.style.borderColor = 'var(--border)'}
-        />
-        <Btn onClick={() => { search(input); setInput('') }} variant="primary" style={{ padding:'0 20px' }}>Search</Btn>
-      </div>
-
-      {/* Specific place search */}
-      <div style={{ marginBottom:14 }}>
+      {/* ── UNIFIED SEARCH BAR ── */}
+      <div style={{ marginBottom:16 }}>
         <div style={{ fontSize:11, color:'var(--ink-muted)', fontWeight:500, textTransform:'uppercase', letterSpacing:'0.6px', marginBottom:6 }}>
-          Search a Specific Place
+          Search by vibe or place name
         </div>
         <div style={{ display:'flex', gap:10 }}>
-          <input value={specificPlace} onChange={e => setSpecificPlace(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && specificPlace.trim()) { search(null, specificPlace); setSpecificPlace('') }}}
-            placeholder={`e.g. "Starbucks", "Van Vihar", "Pizza Hut ${ctx.label}"…`}
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && query.trim()) search() }}
+            placeholder={ctx.isTrip
+              ? `"Starbucks" · "best biryani" · "Van Vihar" · "rooftop café in ${ctx.label}"`
+              : `"Starbucks" · "koi chill jagah" · "best pizza near me" · "quiet café WiFi"`
+            }
             style={{
-              flex:1, padding:'11px 16px', borderRadius:12, border:'1px solid var(--border)',
-              background:'var(--white)', fontSize:13, fontFamily:'var(--font-body)',
-              color:'var(--ink)', outline:'none',
+              flex:1, padding:'13px 16px', borderRadius:14,
+              border:'1px solid var(--border)', background:'var(--white)',
+              fontSize:13, fontFamily:'var(--font-body)', color:'var(--ink)',
+              outline:'none', boxShadow:'var(--shadow-sm)',
             }}
-            onFocus={e => e.target.style.borderColor = 'var(--sky)'}
+            onFocus={e => e.target.style.borderColor = 'var(--gold)'}
             onBlur={e  => e.target.style.borderColor = 'var(--border)'}
           />
-          <button onClick={() => { if (specificPlace.trim()) { search(null, specificPlace); setSpecificPlace('') }}} style={{
-            padding:'0 18px', borderRadius:12, border:'none',
-            background:'var(--sky)', color:'white', fontSize:13,
-            fontWeight:500, cursor:'pointer', fontFamily:'var(--font-body)', whiteSpace:'nowrap',
-          }}>Find Place</button>
+          <Btn onClick={() => search()} variant="primary" style={{ padding:'0 24px', whiteSpace:'nowrap' }}>Search</Btn>
+        </div>
+        <div style={{ fontSize:11, color:'var(--ink-muted)', marginTop:6 }}>
+          Works for specific place names, vibes, cuisines, and any language
         </div>
       </div>
 
-      {/* Quick vibes */}
-      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:14 }}>
+      {/* Quick vibe chips */}
+      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:16 }}>
         {QUICK_VIBES.map(v => (
-          <button key={v.label} onClick={() => search(v.vibe)} style={{
+          <button key={v.label} onClick={() => { setQuery(v.vibe); search(v.vibe) }} style={{
             padding:'6px 14px', borderRadius:20, border:'1px solid var(--border)',
             background:'var(--white)', fontSize:12, cursor:'pointer',
             fontFamily:'var(--font-body)', color:'var(--ink-soft)', transition:'all 0.15s',
@@ -272,8 +221,7 @@ export default function ExplorePage() {
           {groupProfiles.map((p, i) => (
             <div key={i} style={{ display:'flex', gap:8, marginBottom:8 }}>
               {['name','dietary','interests'].map(f => (
-                <input key={f}
-                  value={p[f]}
+                <input key={f} value={p[f]}
                   onChange={e => { const arr = [...groupProfiles]; arr[i] = { ...arr[i], [f]: e.target.value }; setGroupProfiles(arr) }}
                   placeholder={f === 'name' ? `Person ${i+1}` : f === 'dietary' ? 'Dietary' : 'Interests'}
                   style={{ flex:1, padding:'8px 10px', borderRadius:8, border:'1px solid var(--border)', fontSize:12, fontFamily:'var(--font-body)', outline:'none' }}
@@ -288,7 +236,7 @@ export default function ExplorePage() {
         </div>
       )}
 
-      <SectionHeader title="Results" action={() => search(input)} actionLabel="↺ Refresh"/>
+      <SectionHeader title="Results" action={() => query.trim() ? search() : null} actionLabel="↺ Refresh"/>
 
       {suggestionsLoading ? (
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
@@ -301,10 +249,7 @@ export default function ExplorePage() {
         </div>
       ) : suggestions.length === 0 ? (
         <EmptyState icon="🧭" title="Start exploring"
-          desc={ctx.isTrip
-            ? `Search for places in ${ctx.label} or tap a vibe above`
-            : 'Use the search bar or tap a vibe above to find your next spot'
-          }
+          desc={`Type anything above — a place name like "Starbucks", a vibe like "chill café", or even "${ctx.isTrip ? `best food in ${ctx.label}` : 'koi achha jagah batao'}"` }
         />
       ) : (
         <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
