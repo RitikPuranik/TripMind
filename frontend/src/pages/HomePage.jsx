@@ -253,12 +253,12 @@ export default function HomePage() {
         {/* Unified search — vibe + specific place in one bar */}
         <div style={{ marginBottom:14 }}>
           <div style={{ fontSize:11, color:'var(--ink-muted)', fontWeight:500, textTransform:'uppercase', letterSpacing:'0.6px', marginBottom:6 }}>
-            Search by vibe or place name
+            Search by vibe
           </div>
           <div style={{ display:'flex', gap:10 }}>
             <input value={vibeInput} onChange={e=>setVibeInput(e.target.value)}
               onKeyDown={e=>{if(e.key==='Enter'&&vibeInput.trim()){fetchSuggestions(vibeInput);setVibeInput('')}}}
-              placeholder={`"Starbucks" · "koi chill jagah" · "best biryani near me" · "rooftop café"`}
+              placeholder={`"koi chill jagah" · "best biryani near me" · "rooftop café"`}
               style={{ flex:1, padding:'11px 16px', borderRadius:12, border:'1px solid var(--border)', background:'var(--white)', fontSize:13, fontFamily:'var(--font-body)', color:'var(--ink)', outline:'none', boxShadow:'var(--shadow-sm)' }}
               onFocus={e=>e.target.style.borderColor='var(--gold)'} onBlur={e=>e.target.style.borderColor='var(--border)'}
             />
