@@ -12,6 +12,7 @@ export function useLocation() {
   const setLocation  = useStore(s => s.setLocation)
   const hasFetched   = useRef(false)
   const [locationDenied, setLocationDenied] = useState(false)
+  const [locating,       setLocating]       = useState(false)
 
   useEffect(() => {
     if (hasFetched.current) return
@@ -22,31 +23,43 @@ export function useLocation() {
       return
     }
 
-    // Always request fresh GPS — ignore any cached store value
+    setLocating(true)
+
+    // maximumAge: 0 = never use cached GPS, always get fresh position
     navigator.geolocation.getCurrentPosition(
       async pos => {
         const { latitude: lat, longitude: lng } = pos.coords
         try {
+          // Use Nominatim to get real city name from actual GPS coords
           const r = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`
           )
           const d = await r.json()
-          const name = d.address?.city || d.address?.town || d.address?.suburb || 'Your location'
+          // Try multiple fields to get the best city name
+          const name = d.address?.city
+            || d.address?.town
+            || d.address?.municipality
+            || d.address?.county
+            || d.address?.state_district
+            || d.address?.suburb
+            || 'Your location'
           setLocation({ lat, lng }, name)
         } catch {
-          setLocation({ lat, lng }, 'Your location')
+          // Even if reverse geocoding fails, use real coords
+          setLocation({ lat, lng }, `${lat.toFixed(2)}, ${lng.toFixed(2)}`)
         }
+        setLocating(false)
       },
       (err) => {
-        // Do NOT fall back to hardcoded Bhopal — just mark as denied
-        console.warn('Location denied or unavailable:', err.message)
+        console.warn('Location access denied:', err.message)
         setLocationDenied(true)
+        setLocating(false)
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
     )
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { coords, locationName, locationDenied }
+  return { coords, locationName, locationDenied, locating }
 }
 
 export function useWeather() {

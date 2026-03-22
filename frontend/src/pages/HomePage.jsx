@@ -11,7 +11,7 @@ const ECOLS = ['#C8A96A','#8FA68A','#7BA3C4','#D4907A','#9B8EC4']
 const fmt = dt => new Date(dt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
 
 export default function HomePage() {
-  const { coords, locationName, locationDenied } = useLocation()
+  const { coords, locationName, locationDenied, locating } = useLocation()
   const { weather, loading: wLoading } = useWeather()
 
   const suggestions          = useStore(s => s.suggestions)
@@ -35,7 +35,7 @@ export default function HomePage() {
 
   const fetchSuggestions = async (vibeArg) => {
     const vibe = (vibeArg && typeof vibeArg === 'string') ? vibeArg : undefined
-    if (!coords) { toast.error('Location not available yet'); return }
+    if (!coords) { if (!locationDenied) toast('Getting your location…'); return }
     if (suggestionsLoading) return
     setSuggestionsLoading(true)
     try {
@@ -161,7 +161,7 @@ export default function HomePage() {
                 {Math.round(cur?.temperature_2m ?? 28)}<sup style={{ fontSize:26, verticalAlign:'super' }}>°C</sup>
               </div>
               <div style={{ fontSize:14, color:'rgba(255,255,255,0.65)', marginTop:4 }}>{WMO[code] || 'Fair weather'}</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)', marginTop:2 }}>📍 {locationName}</div>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)', marginTop:2 }}>📍 {locating ? 'Getting your location…' : (locationName || 'Your location')}</div>
               <div style={{ display:'flex', gap:20, marginTop:18 }}>
                 {[['Humidity',`${cur?.relative_humidity_2m??'--'}%`],['Wind',`${cur?.wind_speed_10m??'--'} km/h`],['Feels',`${Math.round(cur?.apparent_temperature??cur?.temperature_2m??28)}°`]].map(([l,v])=>(
                   <div key={l}><div style={{ fontSize:11, color:'rgba(255,255,255,0.45)' }}>{l}</div><div style={{ fontSize:15, color:'white', marginTop:2 }}>{v}</div></div>
