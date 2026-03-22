@@ -35,13 +35,21 @@ export default function HomePage() {
 
   const fetchSuggestions = async (vibeArg) => {
     const vibe = (vibeArg && typeof vibeArg === 'string') ? vibeArg : undefined
-    if (!coords) { if (!locationDenied) toast('Getting your location…'); return }
+    // Need either real coords OR a real city name — never use fallback India coords
+    if (!coords && !locationName) {
+      if (!locationDenied) toast('Getting your location…')
+      return
+    }
     if (suggestionsLoading) return
     setSuggestionsLoading(true)
     try {
       const cur = weather?.current
+      // Always pass city name — Groq uses this as primary context
+      // coords are secondary (for distance calc), city name drives the suggestions
       const data = await suggestionsAPI.get({
-        lat: coords.lat, lng: coords.lng, city: locationName || '',
+        lat: coords?.lat || 20.5937,
+        lng: coords?.lng || 78.9629,
+        city: locationName || '',   // THIS is what Groq uses to pick the city
         free_minutes: 120,
         weather_code: cur?.weathercode || 0,
         temperature: cur?.temperature_2m || 28,
@@ -60,11 +68,11 @@ export default function HomePage() {
   }
 
   useEffect(() => {
-    // Only auto-fetch if we have REAL GPS coords — not hardcoded fallback
-    if (!coords || hasFetchedSuggestions.current) return
+    // Trigger when we have a real city name from GPS reverse geocoding
+    if (!locationName || hasFetchedSuggestions.current) return
     hasFetchedSuggestions.current = true
     fetchSuggestions()
-  }, [coords?.lat, coords?.lng]) // eslint-disable-line
+  }, [locationName]) // eslint-disable-line
 
   const handleThumb = (id, vote) => {
     const s = suggestions.find(x => x.id === id)

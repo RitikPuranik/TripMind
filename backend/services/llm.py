@@ -243,7 +243,7 @@ Return ONLY a JSON array of 5 objects sorted by score descending (highest first)
 
     try:
         reply = await call_groq(
-            [{"role": "user", "content": f"Generate 5 place suggestions for {city}. Return ONLY the JSON array, nothing else."}],
+            [{"role": "user", "content": f"Generate 5 real well-known place suggestions specifically in {city}, India. Only suggest places that actually exist in {city}. Return ONLY the JSON array."}],
             system, 1500, json_mode=True
         )
         data = extract_json(reply)
