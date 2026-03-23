@@ -194,7 +194,7 @@ def _fsq_to_suggestions_fallback(fsq_places: list, city: str) -> list:
     result = []
     for i, p in enumerate(fsq_places[:6]):
         result.append({
-            "id":               p.get("fsq_id") or f"fsq_{i}",
+            "id":               p.get("fsq_id") or f'{p["name"].lower().replace(" ","_")}_{i}',
             "name":             p["name"],
             "place_type":       p["category"].lower().split()[0],
             "emoji":            p["emoji"],

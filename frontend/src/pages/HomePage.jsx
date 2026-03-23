@@ -58,7 +58,15 @@ export default function HomePage() {
         vibe: vibe ? `${vibe} in ${locationName || ''}`.trim() : null,
         hidden_gems_only: false,
       })
-      setSuggestions(Array.isArray(data) ? data : [])
+      // Deduplicate by name to prevent same place appearing twice
+      const seen = new Set()
+      const deduped = (Array.isArray(data) ? data : []).filter(s => {
+        const key = (s.name || s.id || '').toLowerCase()
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      setSuggestions(deduped)
     } catch (err) {
       console.error('Suggestions error:', err?.response?.data || err?.message || err)
       toast.error('Could not load suggestions')

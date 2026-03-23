@@ -86,7 +86,15 @@ export default function ExplorePage() {
         hidden_gems_only: hiddenGems,
         group_profiles: groupMode ? groupProfiles.filter(p => p.name) : null,
       })
-      setSuggestions(Array.isArray(data) ? data : [])
+      // Deduplicate by name to prevent same place appearing twice
+      const seen = new Set()
+      const deduped = (Array.isArray(data) ? data : []).filter(s => {
+        const key = (s.name || s.id || '').toLowerCase()
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      setSuggestions(deduped)
     } catch { toast.error('Search failed') }
     setSuggestionsLoading(false)
   }, [query, selectedTripId, coords?.lat, coords?.lng, hiddenGems, groupMode, groupProfiles]) // eslint-disable-line

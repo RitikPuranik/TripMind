@@ -19,7 +19,7 @@ router = APIRouter()
 def _to_out(s: dict, req: SuggestionRequest) -> SuggestionOut:
     """Safely convert raw suggestion dict to SuggestionOut."""
     return SuggestionOut(
-        id=str(s.get("id") or s.get("fsq_id") or "unknown")[:60],
+        id=str(s.get("id") or s.get("fsq_id") or str(s.get("name","place")).lower().replace(" ","_"))[:60],
         name=s.get("name", "Place"),
         place_type=str(s.get("place_type", "place")).lower()[:30],
         emoji=s.get("emoji", "📍"),
