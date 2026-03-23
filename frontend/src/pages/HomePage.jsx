@@ -74,15 +74,19 @@ export default function HomePage() {
   }, [locationName]) // eslint-disable-line
 
   const handleThumb = (id, vote) => {
-    // Use functional updater to always get fresh suggestions list
-    setSuggestions(prev => {
-      const s = prev.find(x => x.id === id)
-      if (!s) return prev
-      addThumb({ id, name: s.name, type: s.place_type, v: vote })
-      suggestionsAPI.feedback(id, vote).catch(() => {})
-      if (vote === 'down') return prev.filter(x => x.id !== id)
-      return prev  // thumbs up keeps card, visual feedback handled in SuggestionCard
-    })
+    // Find the suggestion OUTSIDE the updater (no side effects inside setState)
+    const found = suggestions.find(x => x.id === id)
+    if (!found) return
+    // Fire side effects outside — API calls must never go inside setSuggestions
+    addThumb({ id, name: found.name, type: found.place_type, v: vote })
+    suggestionsAPI.feedback(id, vote).catch(() => {})
+    if (typeof prefsAPI !== 'undefined') {
+      prefsAPI.feedbackSignal?.(found.place_type, vote).catch(() => {})
+    }
+    // Only mutate state for thumbs down — thumbs up is visual only (SuggestionCard handles it)
+    if (vote === 'down') {
+      setSuggestions(prev => prev.filter(x => x.id !== id))
+    }
   }
 
   const addMeeting = () => {

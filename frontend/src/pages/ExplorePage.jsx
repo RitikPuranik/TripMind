@@ -92,14 +92,13 @@ export default function ExplorePage() {
   }, [query, selectedTripId, coords?.lat, coords?.lng, hiddenGems, groupMode, groupProfiles]) // eslint-disable-line
 
   const handleThumb = (id, vote) => {
-    setSuggestions(prev => {
-      const s = prev.find(x => x.id === id)
-      if (!s) return prev
-      addThumb({ id, name: s.name, type: s.place_type, v: vote })
-      suggestionsAPI.feedback(id, vote).catch(() => {})
-      if (vote === 'down') return prev.filter(x => x.id !== id)
-      return prev
-    })
+    const found = suggestions.find(x => x.id === id)
+    if (!found) return
+    addThumb({ id, name: found.name, type: found.place_type, v: vote })
+    suggestionsAPI.feedback(id, vote).catch(() => {})
+    if (vote === 'down') {
+      setSuggestions(prev => prev.filter(x => x.id !== id))
+    }
   }
 
   const ctx = getSearchContext()
