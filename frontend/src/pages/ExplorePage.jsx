@@ -27,10 +27,9 @@ function getTripStatus(trip) {
 export default function ExplorePage() {
   const { coords, locationName } = useLocation()
 
-  const suggestions           = useStore(s => s.suggestions)
-  const setSuggestions        = useStore(s => s.setSuggestions)
-  const suggestionsLoading    = useStore(s => s.suggestionsLoading)
-  const setSuggestionsLoading = useStore(s => s.setSuggestionsLoading)
+  // Local state — Explore has its own results, doesn't share with Home
+  const [suggestions,        setSuggestions]        = useState([])
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false)
   const budgetLevel           = useStore(s => s.preferences.budget_level)
   const dietary               = useStore(s => s.preferences.dietary)
   const interests             = useStore(s => s.preferences.interests)

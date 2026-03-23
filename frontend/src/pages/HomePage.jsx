@@ -14,10 +14,9 @@ export default function HomePage() {
   const { coords, locationName, locationDenied, locating } = useLocation()
   const { weather, loading: wLoading } = useWeather()
 
-  const suggestions          = useStore(s => s.suggestions)
-  const setSuggestions       = useStore(s => s.setSuggestions)
-  const suggestionsLoading   = useStore(s => s.suggestionsLoading)
-  const setSuggestionsLoading = useStore(s => s.setSuggestionsLoading)
+  // Local state — Home has its own results, doesn't bleed into Explore
+  const [suggestions,         setSuggestions]        = useState([])
+  const [suggestionsLoading,  setSuggestionsLoading] = useState(false)
   const budgetLevel          = useStore(s => s.preferences.budget_level)
   const dietary              = useStore(s => s.preferences.dietary)
   const interests            = useStore(s => s.preferences.interests)
@@ -253,12 +252,12 @@ export default function HomePage() {
         {/* Unified search — vibe + specific place in one bar */}
         <div style={{ marginBottom:14 }}>
           <div style={{ fontSize:11, color:'var(--ink-muted)', fontWeight:500, textTransform:'uppercase', letterSpacing:'0.6px', marginBottom:6 }}>
-            Search by vibe
+            Search by vibe or place name
           </div>
           <div style={{ display:'flex', gap:10 }}>
             <input value={vibeInput} onChange={e=>setVibeInput(e.target.value)}
               onKeyDown={e=>{if(e.key==='Enter'&&vibeInput.trim()){fetchSuggestions(vibeInput);setVibeInput('')}}}
-              placeholder={`"koi chill jagah" · "best biryani near me" · "rooftop café"`}
+              placeholder={`"Starbucks" · "koi chill jagah" · "best biryani near me" · "rooftop café"`}
               style={{ flex:1, padding:'11px 16px', borderRadius:12, border:'1px solid var(--border)', background:'var(--white)', fontSize:13, fontFamily:'var(--font-body)', color:'var(--ink)', outline:'none', boxShadow:'var(--shadow-sm)' }}
               onFocus={e=>e.target.style.borderColor='var(--gold)'} onBlur={e=>e.target.style.borderColor='var(--border)'}
             />

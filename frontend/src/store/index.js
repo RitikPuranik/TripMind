@@ -40,10 +40,7 @@ export const useStore = create(
       activeTrip: null,
       setActiveTrip: (activeTrip) => set({ activeTrip }),
 
-      suggestions: [],
-      setSuggestions: (suggestions) => set({ suggestions }),
-      suggestionsLoading: false,
-      setSuggestionsLoading: (suggestionsLoading) => set({ suggestionsLoading }),
+      // suggestions moved to local page state (HomePage + ExplorePage manage their own)
 
       alerts: [],
       setAlerts: (alerts) => set({ alerts }),
