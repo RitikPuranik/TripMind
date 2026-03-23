@@ -91,12 +91,16 @@ export default function ExplorePage() {
     setSuggestionsLoading(false)
   }, [query, selectedTripId, coords?.lat, coords?.lng, hiddenGems, groupMode, groupProfiles]) // eslint-disable-line
 
-  const handleThumb = useCallback((id, vote) => {
-    const s = suggestions.find(x => x.id === id)
-    if (s) addThumb({ id, name: s.name, type: s.place_type, v: vote })
-    if (vote === 'down') setSuggestions(suggestions.filter(x => x.id !== id))
-    suggestionsAPI.feedback(id, vote).catch(() => {})
-  }, [suggestions]) // eslint-disable-line
+  const handleThumb = (id, vote) => {
+    setSuggestions(prev => {
+      const s = prev.find(x => x.id === id)
+      if (!s) return prev
+      addThumb({ id, name: s.name, type: s.place_type, v: vote })
+      suggestionsAPI.feedback(id, vote).catch(() => {})
+      if (vote === 'down') return prev.filter(x => x.id !== id)
+      return prev
+    })
+  }
 
   const ctx = getSearchContext()
 

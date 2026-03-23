@@ -74,12 +74,15 @@ export default function HomePage() {
   }, [locationName]) // eslint-disable-line
 
   const handleThumb = (id, vote) => {
-    const s = suggestions.find(x => x.id === id)
-    if (!s) return
-    addThumb({ id, name: s.name, type: s.place_type, v: vote })
-    if (vote === 'down') setSuggestions(suggestions.filter(x => x.id !== id))
-    suggestionsAPI.feedback(id, vote).catch(() => {})
-    prefsAPI.feedbackSignal(s.place_type, vote).catch(() => {})
+    // Use functional updater to always get fresh suggestions list
+    setSuggestions(prev => {
+      const s = prev.find(x => x.id === id)
+      if (!s) return prev
+      addThumb({ id, name: s.name, type: s.place_type, v: vote })
+      suggestionsAPI.feedback(id, vote).catch(() => {})
+      if (vote === 'down') return prev.filter(x => x.id !== id)
+      return prev  // thumbs up keeps card, visual feedback handled in SuggestionCard
+    })
   }
 
   const addMeeting = () => {
